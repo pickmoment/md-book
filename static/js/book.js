@@ -94,6 +94,15 @@ window.addEventListener('popstate', e => {
   if (e.state?.url) navigateTo(e.state.url);
 });
 
+// Sidebar TOC link navigation
+document.getElementById('sidebar').addEventListener('click', e => {
+  const a = e.target.closest('a[href]');
+  if (!a || a.id === 'sidebar-title') return;
+  if (new URL(a.href).origin !== location.origin) return;
+  e.preventDefault();
+  navigateTo(a.href);
+});
+
 // Arrow key navigation (← prev, → next)
 document.addEventListener('keydown', e => {
   if (e.altKey || e.ctrlKey || e.metaKey) return;
