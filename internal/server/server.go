@@ -1,0 +1,196 @@
+package server
+
+import (
+	"bytes"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/pickmoment/md-book/internal/book"
+	"github.com/pickmoment/md-book/internal/render"
+)
+
+type Server struct {
+	dir      string
+	mu       sync.RWMutex
+	book     *book.Book
+	reload   chan struct{}
+	watcher  *fsnotify.Watcher
+	static   http.Handler
+}
+
+func New(dir string, staticFS http.FileSystem) (*Server, error) {
+	b, err := book.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	if err := watcher.Add(dir); err != nil {
+		return nil, err
+	}
+
+	s := &Server{
+		dir:    dir,
+		book:   b,
+		reload: make(chan struct{}, 1),
+		watcher: watcher,
+		static: http.FileServer(staticFS),
+	}
+	go s.watchLoop()
+	return s, nil
+}
+
+func (s *Server) watchLoop() {
+	for {
+		select {
+		case event, ok := <-s.watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
+				s.rebuildBook()
+				select {
+				case s.reload <- struct{}{}:
+				default:
+				}
+			}
+		case err, ok := <-s.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("watcher error: %v", err)
+		}
+	}
+}
+
+func (s *Server) rebuildBook() {
+	b, err := book.Load(s.dir)
+	if err != nil {
+		log.Printf("reload error: %v", err)
+		return
+	}
+	s.mu.Lock()
+	s.book = b
+	s.mu.Unlock()
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+
+	switch {
+	case path == "/_reload":
+		s.serveSSE(w, r)
+	case strings.HasPrefix(path, "/_static/"):
+		r2 := *r
+		r2.URL.Path = strings.TrimPrefix(path, "/_static")
+		s.static.ServeHTTP(w, &r2)
+	default:
+		s.servePage(w, r)
+	}
+}
+
+func (s *Server) servePage(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	b := s.book
+	s.mu.RUnlock()
+
+	urlPath := r.URL.Path
+	if urlPath == "/" {
+		// redirect to first page
+		if len(b.Flat) > 0 {
+			http.Redirect(w, r, b.Flat[0].URLPath, http.StatusTemporaryRedirect)
+			return
+		}
+		http.Error(w, "no pages found", http.StatusNotFound)
+		return
+	}
+
+	node, idx := b.FindByURL(urlPath)
+	if node == nil || node.FilePath == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	src, err := os.ReadFile(node.FilePath)
+	if err != nil {
+		http.Error(w, "cannot read file", http.StatusInternalServerError)
+		return
+	}
+
+	result, err := render.Page(src)
+	if err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+		return
+	}
+
+	// Use rendered title only for the current page display; don't mutate the
+	// shared book node (titles are pre-loaded at book.Load time).
+	pageTitle := node.Title
+	if result.Title != "" {
+		pageTitle = result.Title
+	}
+
+	data := buildPageData(b, node, pageTitle, result.HTML, idx)
+
+	var buf bytes.Buffer
+	if err := pageTmpl.Execute(&buf, data); err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(buf.Bytes()) //nolint:errcheck
+}
+
+func (s *Server) serveSSE(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// heartbeat so connection stays alive
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-s.reload:
+			fmt.Fprint(w, "event: reload\ndata: {}\n\n")
+			flusher.Flush()
+		case <-ticker.C:
+			fmt.Fprint(w, ": heartbeat\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
+func OpenBrowser(url string) {
+	var cmd string
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd, args = "open", []string{url}
+	case "windows":
+		cmd, args = "cmd", []string{"/c", "start", url}
+	default:
+		cmd, args = "xdg-open", []string{url}
+	}
+	_ = runCommand(cmd, args...)
+}

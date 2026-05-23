@@ -1,0 +1,16 @@
+# binary
+md-book
+
+# Go
+/vendor/
+*.test
+*.out
+coverage.out
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
