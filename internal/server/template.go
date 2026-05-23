@@ -2,7 +2,6 @@ package server
 
 import (
 	"html/template"
-	"strings"
 
 	"github.com/pickmoment/md-book/internal/book"
 )
@@ -53,8 +52,6 @@ const pageHTML = `<!DOCTYPE html>
     {{if .Next}}<a class="next" href="{{.Next.URLPath}}">{{.Next.Title}}</a>{{else}}<span></span>{{end}}
   </footer>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true});</script>
 <script src="/_static/js/book.js"></script>
 </body>
 </html>
@@ -93,12 +90,6 @@ type pageData struct {
 	Next       *book.Node
 }
 
-// tocData is passed to the nested "toc" template
-type tocData struct {
-	Nodes      []*book.Node
-	CurrentURL string
-}
-
 func buildPageData(b *book.Book, node *book.Node, pageTitle, content string, idx int) pageData {
 	if pageTitle == "" {
 		pageTitle = b.Title
@@ -123,9 +114,3 @@ func buildPageData(b *book.Book, node *book.Node, pageTitle, content string, idx
 	}
 }
 
-func renderTitle(rendered, fallback string) string {
-	if strings.TrimSpace(rendered) != "" {
-		return rendered
-	}
-	return fallback
-}
