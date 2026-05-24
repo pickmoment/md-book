@@ -21,7 +21,7 @@ go build -o md-book .
 ## 사용법
 
 ```bash
-md-book serve <directory> [--port N] [--no-open]
+md-book <directory|file.md> [--port N] [--no-open]
 ```
 
 | 옵션 | 기본값 | 설명 |
@@ -31,13 +31,16 @@ md-book serve <directory> [--port N] [--no-open]
 
 ```bash
 # 현재 디렉토리를 브라우저로 열기
-md-book serve .
+md-book .
+
+# 단일 파일 보기
+md-book README.md
 
 # 포트 변경
-md-book serve ./docs --port 8080
+md-book ./docs --port 8080
 
 # 브라우저 자동 열기 없이 서버만 실행
-md-book serve ./docs --no-open
+md-book ./docs --no-open
 ```
 
 ## 기능
