@@ -21,44 +21,33 @@ func main() {
 	noOpen := fs.Bool("no-open", false, "don't open browser automatically")
 
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: md-book serve <directory> [--port N] [--no-open]")
+		fmt.Fprintln(os.Stderr, "usage: md-book <directory|file.md> [--port N] [--no-open]")
 		os.Exit(1)
 	}
 
-	switch os.Args[1] {
-	case "serve":
-		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: md-book serve <directory> [--port N] [--no-open]")
-			os.Exit(1)
-		}
-		dir := os.Args[2]
-		fs.Parse(os.Args[3:]) //nolint:errcheck
+	dir := os.Args[1]
+	fs.Parse(os.Args[2:]) //nolint:errcheck
 
-		staticFS, err := staticFilesFS()
-		if err != nil {
-			log.Fatal(err)
-		}
+	staticFS, err := staticFilesFS()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		srv, err := server.New(dir, staticFS)
-		if err != nil {
-			log.Fatalf("failed to load book: %v", err)
-		}
+	srv, err := server.New(dir, staticFS)
+	if err != nil {
+		log.Fatalf("failed to load book: %v", err)
+	}
 
-		addr := fmt.Sprintf(":%d", *port)
-		url := fmt.Sprintf("http://localhost:%d", *port)
-		log.Printf("serving %s at %s", dir, url)
+	addr := fmt.Sprintf(":%d", *port)
+	url := fmt.Sprintf("http://localhost:%d", *port)
+	log.Printf("serving %s at %s", dir, url)
 
-		if !*noOpen {
-			server.OpenBrowser(url)
-		}
+	if !*noOpen {
+		server.OpenBrowser(url)
+	}
 
-		if err := http.ListenAndServe(addr, srv); err != nil {
-			log.Fatal(err)
-		}
-
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
-		os.Exit(1)
+	if err := http.ListenAndServe(addr, srv); err != nil {
+		log.Fatal(err)
 	}
 }
 

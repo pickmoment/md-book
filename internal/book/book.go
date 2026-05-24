@@ -41,6 +41,14 @@ var numPrefix = regexp.MustCompile(`^\d+-`)
 func Load(dir string) (*Book, error) {
 	dir = filepath.Clean(dir)
 
+	info, err := os.Stat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return loadSingleFile(dir)
+	}
+
 	m, err := loadManifest(dir)
 	if err != nil {
 		return nil, err
@@ -63,6 +71,15 @@ func Load(dir string) (*Book, error) {
 
 	b := &Book{Title: title, Root: nodes}
 	b.Flat = flatten(nodes)
+	return b, nil
+}
+
+func loadSingleFile(filePath string) (*Book, error) {
+	node, err := buildFileNode(filepath.Dir(filePath), filePath, "")
+	if err != nil {
+		return nil, err
+	}
+	b := &Book{Title: node.Title, Root: []*Node{node}, Flat: []*Node{node}}
 	return b, nil
 }
 
