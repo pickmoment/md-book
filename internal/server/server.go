@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,20 +13,22 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/pickmoment/md-book/internal/ai"
 	"github.com/pickmoment/md-book/internal/book"
 	"github.com/pickmoment/md-book/internal/render"
 )
 
 type Server struct {
-	dir      string
-	mu       sync.RWMutex
-	book     *book.Book
-	reload   chan struct{}
-	watcher  *fsnotify.Watcher
-	static   http.Handler
+	dir     string
+	mu      sync.RWMutex
+	book    *book.Book
+	reload  chan struct{}
+	watcher *fsnotify.Watcher
+	static  http.Handler
+	ai      ai.Backend
 }
 
-func New(dir string, staticFS http.FileSystem) (*Server, error) {
+func New(dir string, staticFS http.FileSystem, aiBackend ai.Backend) (*Server, error) {
 	b, err := book.Load(dir)
 	if err != nil {
 		return nil, err
@@ -40,11 +43,12 @@ func New(dir string, staticFS http.FileSystem) (*Server, error) {
 	}
 
 	s := &Server{
-		dir:    dir,
-		book:   b,
-		reload: make(chan struct{}, 1),
+		dir:     dir,
+		book:    b,
+		reload:  make(chan struct{}, 1),
 		watcher: watcher,
-		static: http.FileServer(staticFS),
+		static:  http.FileServer(staticFS),
+		ai:      aiBackend,
 	}
 	go s.watchLoop()
 	return s, nil
@@ -90,6 +94,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "/_reload":
 		s.serveSSE(w, r)
+	case path == "/_ask":
+		s.serveAsk(w, r)
 	case strings.HasPrefix(path, "/_static/"):
 		r2 := *r
 		r2.URL.Path = strings.TrimPrefix(path, "/_static")
@@ -179,6 +185,35 @@ func (s *Server) serveSSE(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func (s *Server) serveAsk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Messages []ai.Message `json:"messages"`
+		Context  string       `json:"context"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if len(req.Messages) == 0 {
+		http.Error(w, "messages required", http.StatusBadRequest)
+		return
+	}
+
+	answer, err := s.ai.Ask(r.Context(), req.Context, req.Messages)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}) //nolint:errcheck
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"answer": answer}) //nolint:errcheck
 }
 
 func OpenBrowser(url string) {

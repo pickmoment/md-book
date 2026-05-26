@@ -52,6 +52,21 @@ const pageHTML = `<!DOCTYPE html>
     {{if .Next}}<a class="next" href="{{.Next.URLPath}}">{{.Next.Title}}</a>{{else}}<span></span>{{end}}
   </footer>
 </div>
+<div id="ai-panel">
+  <div id="ai-resize-handle"></div>
+  <div class="ai-panel-header">
+    <span>AI 질문</span>
+    <button id="ai-panel-close" title="닫기">✕</button>
+  </div>
+  <div id="ai-context-box"></div>
+  <div id="ai-messages"></div>
+  <div class="ai-input-row">
+    <textarea id="ai-input" placeholder="질문을 입력하세요... (Enter로 전송, Shift+Enter 줄바꿈)" rows="2"></textarea>
+    <button id="ai-send">전송</button>
+  </div>
+</div>
+<button id="ai-open-btn" title="AI에게 질문">AI</button>
+<div id="ai-tooltip">Ask AI</div>
 <script src="/_static/js/book.js"></script>
 </body>
 </html>

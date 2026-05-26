@@ -124,6 +124,200 @@ window.addEventListener('load', () => {
   es.addEventListener('reload', () => location.reload());
 });
 
+// AI Chat Panel
+(function () {
+  const panel = document.getElementById('ai-panel');
+  const tooltip = document.getElementById('ai-tooltip');
+  const closeBtn = document.getElementById('ai-panel-close');
+  const openBtn = document.getElementById('ai-open-btn');
+  const input = document.getElementById('ai-input');
+  const sendBtn = document.getElementById('ai-send');
+  const messagesEl = document.getElementById('ai-messages');
+  const contextBox = document.getElementById('ai-context-box');
+  const resizeHandle = document.getElementById('ai-resize-handle');
+
+  const AI_WIDTH_KEY = 'md-book-ai-width';
+  const savedWidth = parseInt(localStorage.getItem(AI_WIDTH_KEY));
+  if (savedWidth) panel.style.width = savedWidth + 'px';
+
+  let aiContext = '';
+  let aiMessages = [];
+  let pendingSelection = '';
+
+  function panelWidth() { return panel.offsetWidth; }
+
+  function openPanel(selectedText) {
+    if (selectedText) {
+      aiContext = selectedText;
+      contextBox.textContent = selectedText;
+      contextBox.classList.add('has-context');
+    }
+    panel.classList.add('open');
+    openBtn.style.display = 'none';
+    if (window.innerWidth > 768) {
+      document.getElementById('main').style.marginRight = panelWidth() + 'px';
+    }
+    hideTooltip();
+    setTimeout(() => input.focus(), 50);
+    ensureMarked();
+  }
+
+  function closePanel() {
+    panel.classList.remove('open');
+    openBtn.style.display = '';
+    document.getElementById('main').style.marginRight = '';
+  }
+
+  function hideTooltip() {
+    tooltip.style.display = 'none';
+    pendingSelection = '';
+  }
+
+  closeBtn.addEventListener('click', closePanel);
+  openBtn.addEventListener('click', () => openPanel(''));
+
+  // Text selection → Ask AI tooltip
+  document.addEventListener('mouseup', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) { hideTooltip(); return; }
+    const text = sel.toString().trim();
+    if (!text) { hideTooltip(); return; }
+    const content = document.getElementById('content');
+    if (!content) { hideTooltip(); return; }
+    const range = sel.getRangeAt(0);
+    if (!content.contains(range.commonAncestorContainer)) { hideTooltip(); return; }
+
+    const rect = range.getBoundingClientRect();
+    const top = rect.top > 42 ? rect.top - 36 : rect.bottom + 6;
+    const left = Math.min(Math.max(4, rect.left), window.innerWidth - 110);
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+    tooltip.style.display = 'block';
+    pendingSelection = text;
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (e.target !== tooltip) hideTooltip();
+  });
+
+  tooltip.addEventListener('mousedown', e => {
+    e.preventDefault();
+    openPanel(pendingSelection);
+  });
+
+  // Resize handle
+  let resizing = false, resizeStartX = 0, resizeStartW = 0;
+
+  resizeHandle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    resizing = true;
+    resizeStartX = e.clientX;
+    resizeStartW = panelWidth();
+    resizeHandle.classList.add('dragging');
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    const delta = resizeStartX - e.clientX;
+    const newW = Math.max(280, Math.min(resizeStartW + delta, Math.floor(window.innerWidth * 0.75)));
+    panel.style.width = newW + 'px';
+    if (document.getElementById('main').style.marginRight) {
+      document.getElementById('main').style.marginRight = newW + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    resizeHandle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    localStorage.setItem(AI_WIDTH_KEY, panelWidth());
+  });
+
+  // Lazy-load marked.js for markdown rendering
+  let _markedPromise = null;
+  function ensureMarked() {
+    if (_markedPromise) return _markedPromise;
+    _markedPromise = new Promise((resolve, reject) => {
+      if (window.marked) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+      s.onload = resolve;
+      s.onerror = () => { _markedPromise = null; reject(new Error('marked load failed')); };
+      document.head.appendChild(s);
+    });
+    return _markedPromise;
+  }
+
+  // Messages
+  function appendMessage(role, content) {
+    const div = document.createElement('div');
+    div.className = 'ai-msg ' + role;
+    div.textContent = content;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  async function sendMessage() {
+    const q = input.value.trim();
+    if (!q || sendBtn.disabled) return;
+    input.value = '';
+    sendBtn.disabled = true;
+
+    appendMessage('user', q);
+    aiMessages.push({ role: 'user', content: q });
+
+    const loading = appendMessage('assistant', '생각 중...');
+    loading.classList.add('loading');
+
+    try {
+      const [res] = await Promise.all([
+        fetch('/_ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: aiMessages, context: aiContext }),
+        }),
+        ensureMarked(),
+      ]);
+      const data = await res.json();
+      loading.remove();
+      if (data.error) {
+        const errMsg = appendMessage('assistant', '오류: ' + data.error);
+        errMsg.style.color = '#c0392b';
+        aiMessages.pop();
+      } else {
+        const msgEl = document.createElement('div');
+        msgEl.className = 'ai-msg assistant';
+        msgEl.innerHTML = marked.parse(data.answer);
+        messagesEl.appendChild(msgEl);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        aiMessages.push({ role: 'assistant', content: data.answer });
+      }
+    } catch (err) {
+      loading.remove();
+      const errMsg = appendMessage('assistant', '오류: ' + err.message);
+      errMsg.style.color = '#c0392b';
+      aiMessages.pop();
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && panel.classList.contains('open')) closePanel();
+  });
+})();
+
 // Mermaid: load from CDN only on pages that actually contain diagrams.
 function initMermaid() {
   const blocks = document.querySelectorAll('pre code.language-mermaid');
