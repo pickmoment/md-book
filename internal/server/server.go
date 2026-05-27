@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -114,7 +115,7 @@ func (s *Server) servePage(w http.ResponseWriter, r *http.Request) {
 	if urlPath == "/" {
 		// redirect to first page
 		if len(b.Flat) > 0 {
-			http.Redirect(w, r, b.Flat[0].URLPath, http.StatusTemporaryRedirect)
+			http.Redirect(w, r, (&url.URL{Path: b.Flat[0].URLPath}).EscapedPath(), http.StatusTemporaryRedirect)
 			return
 		}
 		http.Error(w, "no pages found", http.StatusNotFound)
