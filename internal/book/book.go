@@ -303,6 +303,34 @@ func flatten(nodes []*Node) []*Node {
 	return out
 }
 
+// BuildWikiResolver returns a function that maps a wiki link name (e.g. "Getting Started")
+// to its URL path by searching the book's flat node list by file basename.
+// Matching is case-insensitive and treats hyphens, underscores, and spaces as equivalent.
+// Returns "" when no match is found (caller should fall back to a slug).
+func (b *Book) BuildWikiResolver() func(string) string {
+	lookup := make(map[string]string, len(b.Flat))
+	for _, n := range b.Flat {
+		if n.FilePath == "" {
+			continue
+		}
+		base := strings.TrimSuffix(filepath.Base(n.FilePath), ".md")
+		key := normalizeWikiKey(base)
+		if _, exists := lookup[key]; !exists {
+			lookup[key] = n.URLPath
+		}
+	}
+	return func(name string) string {
+		return lookup[normalizeWikiKey(name)]
+	}
+}
+
+func normalizeWikiKey(s string) string {
+	s = numPrefix.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.ReplaceAll(s, "_", " ")
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
 func (b *Book) FindByURL(urlPath string) (*Node, int) {
 	// Normalise: strip trailing slash and /index suffix
 	urlPath = strings.TrimSuffix(urlPath, "/")

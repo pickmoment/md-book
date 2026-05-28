@@ -140,7 +140,7 @@ func (s *Server) servePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := render.Page(src)
+	result, err := render.Page(src, b.BuildWikiResolver())
 	if err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 		return

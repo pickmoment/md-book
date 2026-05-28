@@ -251,13 +251,14 @@ func BuildPrintHTML(b *book.Book, title string) (string, error) {
 </div>
 `)
 
+	resolve := b.BuildWikiResolver()
 	last := len(b.Flat) - 1
 	for i, node := range b.Flat {
 		src, err := os.ReadFile(node.FilePath)
 		if err != nil {
 			continue
 		}
-		result, err := render.Page(src)
+		result, err := render.Page(src, resolve)
 		if err != nil {
 			continue
 		}

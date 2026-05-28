@@ -133,12 +133,13 @@ func BuildEPUB(b *book.Book, title, author string) (string, error) {
 		return "", fmt.Errorf("add css: %w", err)
 	}
 
+	resolve := b.BuildWikiResolver()
 	for _, node := range b.Flat {
 		src, err := os.ReadFile(node.FilePath)
 		if err != nil {
 			continue
 		}
-		result, err := render.Page(src)
+		result, err := render.Page(src, resolve)
 		if err != nil {
 			continue
 		}

@@ -2,7 +2,9 @@ package render
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -40,8 +42,10 @@ type Result struct {
 	HTML  string
 }
 
-func Page(src []byte) (*Result, error) {
-	src = preprocessMarkdown(src)
+// Page renders markdown src to HTML. resolve, if non-nil, maps a wiki link
+// target name to its URL path; a returned "" means no match (slug fallback).
+func Page(src []byte, resolve func(string) string) (*Result, error) {
+	src = preprocessMarkdown(src, resolve)
 
 	var buf bytes.Buffer
 	ctx := parser.NewContext()
@@ -49,8 +53,9 @@ func Page(src []byte) (*Result, error) {
 		return nil, err
 	}
 
+	m := meta.Get(ctx)
 	title := ""
-	if m := meta.Get(ctx); m != nil {
+	if m != nil {
 		if t, ok := m["title"]; ok {
 			title, _ = t.(string)
 		}
@@ -61,7 +66,59 @@ func Page(src []byte) (*Result, error) {
 		title = extractH1(htmlStr)
 	}
 
+	if len(m) > 0 {
+		htmlStr = buildFrontmatterTable(m) + htmlStr
+	}
+
 	return &Result{Title: title, HTML: htmlStr}, nil
+}
+
+func buildFrontmatterTable(m map[string]interface{}) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	sb.WriteString(`<table class="frontmatter"><tbody>`)
+	for _, k := range keys {
+		sb.WriteString(`<tr><th>`)
+		sb.WriteString(escapeHTML(k))
+		sb.WriteString(`</th><td>`)
+		sb.WriteString(escapeHTML(formatMetaValue(m[k])))
+		sb.WriteString(`</td></tr>`)
+	}
+	sb.WriteString(`</tbody></table>`)
+	return sb.String()
+}
+
+func formatMetaValue(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	case []interface{}:
+		parts := make([]string, 0, len(val))
+		for _, item := range val {
+			parts = append(parts, formatMetaValue(item))
+		}
+		return strings.Join(parts, ", ")
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, `"`, "&#34;")
+	return s
 }
 
 // rewriteMdLinks strips the .md extension from href attributes so that
