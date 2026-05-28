@@ -318,6 +318,44 @@ window.addEventListener('load', () => {
   });
 })();
 
+// PDF export modal
+(function () {
+  const modal = document.getElementById('pdf-modal');
+  const openBtn = document.getElementById('pdf-open-modal');
+  const cancelBtn = document.getElementById('pdf-cancel');
+  const confirmBtn = document.getElementById('pdf-confirm');
+  const titleInput = document.getElementById('pdf-title');
+  if (!modal || !openBtn) return;
+
+  function openModal() {
+    modal.hidden = false;
+    titleInput.focus();
+    titleInput.select();
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+  }
+
+  function openPDF() {
+    const title = titleInput.value.trim() || titleInput.defaultValue;
+    const params = new URLSearchParams({ title, autoprint: '1' });
+    window.open('/_export/pdf?' + params.toString(), '_blank', 'noopener');
+    closeModal();
+  }
+
+  openBtn.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  confirmBtn.addEventListener('click', openPDF);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+    if (e.key === 'Enter' && !modal.hidden) {
+      if (document.activeElement?.tagName !== 'BUTTON') openPDF();
+    }
+  });
+})();
+
 // EPUB export modal
 (function () {
   const modal = document.getElementById('epub-modal');

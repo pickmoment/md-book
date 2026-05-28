@@ -214,7 +214,11 @@ img { max-width: 100%; height: auto; }
 
 // BuildPrintHTML renders all book pages into a single print-optimised HTML
 // document. Open it in a browser and use the browser's print dialog to save as PDF.
-func BuildPrintHTML(b *book.Book) (string, error) {
+// title overrides b.Title when non-empty.
+func BuildPrintHTML(b *book.Book, title string) (string, error) {
+	if title == "" {
+		title = b.Title
+	}
 	var sb strings.Builder
 
 	sb.WriteString(`<!DOCTYPE html>
@@ -223,7 +227,7 @@ func BuildPrintHTML(b *book.Book) (string, error) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>`)
-	sb.WriteString(b.Title)
+	sb.WriteString(title)
 	sb.WriteString(`</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -242,7 +246,7 @@ func BuildPrintHTML(b *book.Book) (string, error) {
 </div>
 <div class="book-cover chapter-break">
   <h1>`)
-	sb.WriteString(b.Title)
+	sb.WriteString(title)
 	sb.WriteString(`</h1>
 </div>
 `)

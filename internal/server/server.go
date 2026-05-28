@@ -255,7 +255,7 @@ func (s *Server) serveExportPDF(w http.ResponseWriter, r *http.Request) {
 	b := s.book
 	s.mu.RUnlock()
 
-	htmlContent, err := export.BuildPrintHTML(b)
+	htmlContent, err := export.BuildPrintHTML(b, r.URL.Query().Get("title"))
 	if err != nil {
 		log.Printf("pdf print error: %v", err)
 		http.Error(w, "인쇄 페이지 생성 실패: "+err.Error(), http.StatusInternalServerError)

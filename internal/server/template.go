@@ -41,7 +41,7 @@ const pageHTML = `<!DOCTYPE html>
   </div>
   <div id="export-controls">
     <button id="epub-open-modal" class="export-btn" title="EPUB 파일로 다운로드">↓ EPUB</button>
-    <a href="/_export/pdf?autoprint=1" class="export-btn" target="_blank" rel="noopener" title="PDF로 저장 (인쇄 대화상자)">↓ PDF</a>
+    <button id="pdf-open-modal" class="export-btn" title="PDF로 저장 (인쇄 대화상자)">↓ PDF</button>
   </div>
   <ul class="toc-list">
     {{template "toc" .}}
@@ -71,6 +71,19 @@ const pageHTML = `<!DOCTYPE html>
 </div>
 <button id="ai-open-btn" title="AI에게 질문">AI</button>
 <div id="ai-tooltip">Ask AI</div>
+<div id="pdf-modal" class="modal-overlay" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">
+    <h3 id="pdf-modal-title">PDF 저장</h3>
+    <label class="modal-label">
+      제목
+      <input id="pdf-title" type="text" class="modal-input" value="{{.BookTitle}}" autocomplete="off">
+    </label>
+    <div class="modal-actions">
+      <button id="pdf-cancel" class="modal-btn modal-btn-cancel">취소</button>
+      <button id="pdf-confirm" class="modal-btn modal-btn-ok">🖨 인쇄 / PDF 저장</button>
+    </div>
+  </div>
+</div>
 <div id="epub-modal" class="modal-overlay" hidden>
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="epub-modal-title">
     <h3 id="epub-modal-title">EPUB 저장</h3>
