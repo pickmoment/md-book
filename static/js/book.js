@@ -318,6 +318,55 @@ window.addEventListener('load', () => {
   });
 })();
 
+// EPUB export modal
+(function () {
+  const modal = document.getElementById('epub-modal');
+  const openBtn = document.getElementById('epub-open-modal');
+  const cancelBtn = document.getElementById('epub-cancel');
+  const downloadBtn = document.getElementById('epub-download');
+  const titleInput = document.getElementById('epub-title');
+  const authorInput = document.getElementById('epub-author');
+  if (!modal || !openBtn) return;
+
+  function openModal() {
+    modal.hidden = false;
+    titleInput.focus();
+    titleInput.select();
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+  }
+
+  function startDownload() {
+    const title = titleInput.value.trim() || titleInput.placeholder;
+    const author = authorInput.value.trim();
+    const params = new URLSearchParams({ title });
+    if (author) params.set('author', author);
+    const a = document.createElement('a');
+    a.href = '/_export/epub?' + params.toString();
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    closeModal();
+  }
+
+  openBtn.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  downloadBtn.addEventListener('click', startDownload);
+
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+    if (e.key === 'Enter' && !modal.hidden) {
+      const tag = document.activeElement?.tagName;
+      if (tag !== 'BUTTON') startDownload();
+    }
+  });
+})();
+
 // Mermaid: load from CDN only on pages that actually contain diagrams.
 function initMermaid() {
   const blocks = document.querySelectorAll('pre code.language-mermaid');

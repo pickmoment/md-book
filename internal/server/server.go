@@ -12,10 +12,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/pickmoment/md-book/internal/ai"
 	"github.com/pickmoment/md-book/internal/book"
+	"github.com/pickmoment/md-book/internal/export"
 	"github.com/pickmoment/md-book/internal/render"
 )
 
@@ -97,6 +99,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveSSE(w, r)
 	case path == "/_ask":
 		s.serveAsk(w, r)
+	case path == "/_export/epub":
+		s.serveExportEPUB(w, r)
+	case path == "/_export/pdf":
+		s.serveExportPDF(w, r)
 	case strings.HasPrefix(path, "/_static/"):
 		r2 := *r
 		r2.URL.Path = strings.TrimPrefix(path, "/_static")
@@ -215,6 +221,65 @@ func (s *Server) serveAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]string{"answer": answer}) //nolint:errcheck
+}
+
+func (s *Server) serveExportEPUB(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	b := s.book
+	s.mu.RUnlock()
+
+	q := r.URL.Query()
+	title := q.Get("title")
+	author := q.Get("author")
+
+	epubPath, err := export.BuildEPUB(b, title, author)
+	if err != nil {
+		log.Printf("epub export error: %v", err)
+		http.Error(w, "EPUB 생성 실패: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(epubPath)
+
+	displayTitle := title
+	if displayTitle == "" {
+		displayTitle = b.Title
+	}
+	filename := sanitizeFilename(displayTitle) + ".epub"
+	w.Header().Set("Content-Type", "application/epub+zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename*=UTF-8''%s`, url.PathEscape(filename)))
+	http.ServeFile(w, r, epubPath)
+}
+
+func (s *Server) serveExportPDF(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	b := s.book
+	s.mu.RUnlock()
+
+	htmlContent, err := export.BuildPrintHTML(b)
+	if err != nil {
+		log.Printf("pdf print error: %v", err)
+		http.Error(w, "인쇄 페이지 생성 실패: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(htmlContent)) //nolint:errcheck
+}
+
+// sanitizeFilename keeps Unicode letters, digits, hyphens, and underscores.
+func sanitizeFilename(s string) string {
+	var buf strings.Builder
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' {
+			buf.WriteRune(r)
+		} else if unicode.IsSpace(r) {
+			buf.WriteByte('_')
+		}
+	}
+	if buf.Len() == 0 {
+		return "book"
+	}
+	return buf.String()
 }
 
 func OpenBrowser(url string) {
