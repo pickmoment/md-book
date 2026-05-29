@@ -188,6 +188,10 @@ body { display: flex; min-height: 100vh; color: var(--text); background: var(--b
   font-family: var(--font-body);
 }
 
+#content blockquote p {
+  white-space: pre-line;
+}
+
 /* Code */
 #content code {
   font-family: var(--font-mono);
