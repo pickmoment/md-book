@@ -59,6 +59,23 @@ func Load(dir string) (*Book, error) {
 		nodes, err = buildFromManifest(dir, m)
 	} else {
 		nodes, err = walkDir(dir, "")
+		if err == nil {
+			// walkDir skips index.md at every level (treating it as "handled
+			// by the parent dir node"), but there is no parent node for the
+			// root — so we must prepend it explicitly.
+			if indexFile := findIndex(dir); indexFile != "" {
+				title := extractTitle(indexFile)
+				if title == "" {
+					title = cleanFilename(filepath.Base(dir))
+				}
+				rootNode := &Node{
+					Title:    title,
+					URLPath:  "/",
+					FilePath: indexFile,
+				}
+				nodes = append([]*Node{rootNode}, nodes...)
+			}
+		}
 	}
 	if err != nil {
 		return nil, err

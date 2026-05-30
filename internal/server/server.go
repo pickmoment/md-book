@@ -119,13 +119,16 @@ func (s *Server) servePage(w http.ResponseWriter, r *http.Request) {
 
 	urlPath := r.URL.Path
 	if urlPath == "/" {
-		// redirect to first page
-		if len(b.Flat) > 0 {
+		if len(b.Flat) == 0 {
+			http.Error(w, "no pages found", http.StatusNotFound)
+			return
+		}
+		// If the first page is the root index itself (URLPath "/"), fall through
+		// to serve it; otherwise redirect to the first page.
+		if b.Flat[0].URLPath != "/" {
 			http.Redirect(w, r, (&url.URL{Path: b.Flat[0].URLPath}).EscapedPath(), http.StatusTemporaryRedirect)
 			return
 		}
-		http.Error(w, "no pages found", http.StatusNotFound)
-		return
 	}
 
 	node, idx := b.FindByURL(urlPath)
